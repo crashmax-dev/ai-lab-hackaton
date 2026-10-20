@@ -11,6 +11,9 @@
     4) разметка вывода и UX — TODO-комментарии подскажут.
 
   Трогать не обязательно: блок "LLM: ПОДКЛЮЧЕНИЕ" уже рабочий.
+  Работает с любым сервером-хакатоном на #8000: llama.cpp
+  (docker compose --profile llama|tiny) и стендом организаторов OVMS
+  (если он запрашивает ключ — впишите его в поле «Ключ сервера LLM»).
   ════════════════════════════════════════════════════════════════════
 -->
 <head>
@@ -38,6 +41,10 @@
     <label><input type="checkbox" name="goal" value="обследования"> обследования</label>
     <label><input type="checkbox" name="goal" value="сон"> сон</label>
     <label>Жалобы и образ жизни <textarea id="notes"></textarea></label>
+    <label>Ключ сервера LLM (опционально — если стенд OVMS требует ключ;
+      для docker-профилей llama/tiny оставьте пустым)
+      <input id="apikey" type="text" placeholder="не нужен для llama.cpp" autocomplete="off">
+    </label>
     <button id="go">Составить план</button>
   </form>
 
@@ -51,14 +58,25 @@
     "use strict";
     // ═══════════════════════════════════════════════════════════════
     // ═══ LLM: ПОДКЛЮЧЕНИЕ ══════════════════════════════════════════
-    // Локальная модель (OpenAI-совместимый API, только localhost).
-    // Рабочий минимум — менять не обязательно, кроме BASE_URL.
+    // Локальная модель (OpenAI-совместимый API, только localhost:8000/v1).
+    // Подходит любой из серверов хакатона:
+    //   • llama.cpp — docker compose --profile llama|tiny (см. TASK.md);
+    //   • OVMS — стенд организаторов: тот же /v1, API-ключ вводится
+    //     в поле формы (здесь код менять не нужно).
     // ═══════════════════════════════════════════════════════════════
     const BASE_URL = "http://localhost:8000/v1";
 
-    // model id узнаём в рантайме: у профилей llama/tiny модели разные.
+    // Необязательный Bearer-ключ (для OVMS); llama.cpp работает без него.
+    function authHeaders() {
+      const key = document.getElementById("apikey").value.trim();
+      return key ? { Authorization: "Bearer " + key } : {};
+    }
+
+    // model id узнаём в рантайме: у профилей llama/tiny и у OVMS — разные.
     async function listModels() {
-      const j = await (await fetch(BASE_URL + "/models")).json();
+      const r = await fetch(BASE_URL + "/models", { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status} (ключ верный для OVMS?)`);
+      const j = await r.json();
       const id = j.data && j.data[0] && j.data[0].id;
       if (!id) throw new Error("модель не найдена");
       return id;
@@ -67,7 +85,7 @@
     async function chat(model, messages) {
       const r = await fetch(BASE_URL + "/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
         body: JSON.stringify({ model, messages })
       });
       if (!r.ok) throw new Error("HTTP " + r.status);
