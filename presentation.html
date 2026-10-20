@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>local-llm — TUI presentation</title>
+<style>
+  :root {
+    --bg: #0b0d0c;          /* фон терминала */
+    --win: #101312;         /* фон окна */
+    --fg: #b8c4b0;          /* основной текст */
+    --bright: #e6f0e0;      /* яркий текст */
+    --green: #3fb950;       /* акцент */
+    --amber: #d29922;       /* предупреждения/выделения */
+    --red: #f85149;
+    --dim: #566356;         /* приглушённый */
+    --line: #2a332c;        /* рамки */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: var(--bg); color: var(--fg);
+    font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", "DejaVu Sans Mono", Consolas, monospace;
+    overflow: hidden; font-size: 16px; }
+
+  .slide { display: none; width: 100vw; height: 100vh; padding: 22px 26px 56px; }
+  .slide.active { display: flex; flex-direction: column; }
+
+  /* окно терминала */
+  .term { border: 1px solid var(--line); background: var(--win); flex: 1;
+    display: flex; flex-direction: column; }
+  .term-head { display: flex; align-items: center; gap: 10px;
+    padding: 6px 12px; border-bottom: 1px solid var(--line);
+    background: var(--win); color: var(--dim); font-size: 0.82em; }
+  .term-head .btns { color: var(--dim); letter-spacing: 3px; }
+  .term-head .path { color: var(--green); }
+  .term-body { padding: 22px 30px; overflow-y: auto; flex: 1; line-height: 1.55; }
+
+  h1 { color: var(--bright); font-size: 1.9em; margin-bottom: 18px; font-weight: 700; }
+  h1 .ps1 { color: var(--green); }
+  h2 { color: var(--bright); font-size: 1.35em; margin-bottom: 18px; font-weight: 700; }
+  h2::before { content: "## "; color: var(--green); }
+  h3 { color: var(--amber); font-size: 1.05em; margin: 16px 0 8px; font-weight: 700; }
+  h3::before { content: "> "; color: var(--amber); }
+  p, li { font-size: 1.02em; }
+  p { margin-bottom: 10px; }
+  b { color: var(--bright); }
+
+  /* TUI-список с деревом */
+  ul.tree { list-style: none; margin: 8px 0 12px 4px; }
+  ul.tree li { padding-left: 2.2em; text-indent: -2.2em; margin-bottom: 7px; }
+  ul.tree li::before { content: "├─ "; color: var(--dim); white-space: pre; }
+  ul.tree li:last-child::before { content: "└─ "; color: var(--dim); }
+  ol { margin-left: 1.6em; }
+  ol li { margin-bottom: 7px; }
+
+  code { background: #1a201b; border: 1px solid var(--line); padding: 0 6px;
+    color: var(--green); font-size: 0.95em; }
+  pre { background: #070907; border: 1px solid var(--line); padding: 14px 18px;
+    margin: 12px 0; font-size: 0.95em; line-height: 1.6; overflow-x: auto; color: var(--fg); }
+  pre .c { color: var(--dim); }
+  pre .g { color: var(--green); }
+  pre .a { color: var(--amber); }
+
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.95em; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { color: var(--green); background: #131814; font-weight: 700; }
+  tr:nth-child(even) td { background: #0e1210; }
+
+  .cols { display: flex; gap: 24px; }
+  .col { flex: 1; min-width: 0; }
+  .box { border: 1px solid var(--line); padding: 14px 18px; margin-bottom: 14px; }
+  .box-title { color: var(--green); margin-bottom: 8px; font-weight: 700; }
+  .box-title::before { content: "┌[ "; color: var(--dim); }
+  .box-title::after { content: " ]"; color: var(--dim); }
+
+  .dim { color: var(--dim); }
+  .g { color: var(--green); } .a { color: var(--amber); } .r { color: var(--red); }
+  .tag { display: inline-block; border: 1px solid var(--line); color: var(--fg);
+    padding: 1px 10px; margin: 3px 6px 3px 0; font-size: 0.9em; background: #131814; }
+  .note { color: var(--dim); font-size: 0.88em; margin-top: 12px; font-style: italic; }
+  a { color: var(--green); text-decoration: none; }
+  a:hover { color: var(--bright); text-decoration: underline; }
+
+  /* титульный слайд */
+  .title-slide { justify-content: center; }
+  .ascii-title { color: var(--green); font-size: 0.92em; line-height: 1.25;
+    white-space: pre; margin-bottom: 18px; }
+  .subtitle { color: var(--fg); margin: 8px 0; }
+  .cursor { display: inline-block; width: 0.6em; height: 1.1em; background: var(--green);
+    vertical-align: text-bottom; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* статус-бар как в tmux */
+  .statusbar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; gap: 18px; padding: 5px 16px;
+    background: #131814; border-top: 1px solid var(--line);
+    font-size: 0.82em; color: var(--fg); }
+  .statusbar .session { color: var(--bg); background: var(--green); padding: 1px 10px; font-weight: 700; }
+  .statusbar .seg { color: var(--dim); }
+  .statusbar .nav { display: flex; gap: 8px; }
+  .statusbar button { background: #131814; color: var(--fg); border: 1px solid var(--line);
+    padding: 2px 12px; cursor: pointer; font-family: inherit; font-size: 0.95em; }
+  .statusbar button:hover { border-color: var(--green); color: var(--green); }
+  #bar { letter-spacing: -1px; }
+
+  @media print {
+    html, body { overflow: visible; font-size: 12px; }
+    .slide { display: flex !important; page-break-after: always; height: 100vh; }
+    .statusbar { display: none; }
+    .term-body { overflow: visible; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ 1. ТИТУЛ ══ -->
+<section class="slide active">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">~/presentations/local-llm</span><span>— zsh — 92×32</span></div>
+    <div class="term-body title-slide">
+      <pre class="ascii-title">
+ ██╗      ██████╗  ██████╗ █████╗ ██╗     
+ ██║     ██╔═══██╗██╔════╝██╔══██╗██║     
+ ██║     ██║   ██║██║     ███████║██║     
+ ██║     ██║   ██║██║     ██╔══██║██║     
+ ███████╗╚██████╔╝╚██████╗██║  ██║███████╗
+ ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝</pre>
+      <p class="subtitle"><b>local LLM сегодня и завтра</b><span class="cursor"></span></p>
+      <p class="subtitle dim">как использовать · где применять · что будет дальше</p>
+      <p style="margin-top:22px">
+        <span class="tag">Ollama</span><span class="tag">Llama.cpp</span><span class="tag">LM Studio</span>
+        <span class="tag">OpenVINO</span><span class="tag">OVMS</span><span class="tag">ONNX</span>
+      </p>
+      <p class="note">$ ./run.sh --date 2026-10 --venue mini-hackathon</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 2. ЧТО ТАКОЕ LOCAL LLM ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">01_what_is_local_llm.md</span></div>
+    <div class="term-body">
+      <h2>Что такое local LLM</h2>
+      <p><b>Local LLM</b> — языковая модель, которая запускается <span class="g">локально</span>:
+      на ноутбуке, рабочей станции, сервере или edge-устройстве, а не в облаке.</p>
+      <p>Главная идея: <b>модель работает у вас</b>, а не на удалённом API.</p>
+      <h3>Что даёт local LLM</h3>
+      <ul class="tree">
+        <li>офлайн-работу;</li>
+        <li>контроль над данными;</li>
+        <li>отсутствие оплаты за каждый запрос;</li>
+        <li>низкую задержку в простых сценариях;</li>
+        <li>возможность тонкой настройки под свои задачи.</li>
+      </ul>
+      <pre><span class="c"># модель целиком лежит на вашем диске</span>
+$ <span class="g">ls -lh ~/models</span>
+<span class="a">qwen2.5-7b-q4_k_m.gguf   4.7G</span>  <span class="c">← и это вся «инфраструктура»</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 3. LOCAL VS CLOUD ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">02_local_vs_cloud.md</span></div>
+    <div class="term-body">
+      <h2>Local LLM vs Cloud LLM</h2>
+      <div class="cols">
+        <div class="col box">
+          <div class="box-title">local LLM</div>
+          <ul class="tree">
+            <li>работает на вашем железе;</li>
+            <li>данные не уходят во внешний сервис;</li>
+            <li>зависит от RAM/VRAM/CPU;</li>
+            <li>обычно дешевле в долгую при постоянной нагрузке.</li>
+          </ul>
+        </div>
+        <div class="col box">
+          <div class="box-title">cloud LLM</div>
+          <ul class="tree">
+            <li>работает на удалённой инфраструктуре;</li>
+            <li>проще стартовать;</li>
+            <li>обычно мощнее по качеству;</li>
+            <li>есть цена за токены и зависимость от интернета.</li>
+          </ul>
+        </div>
+      </div>
+      <h3>Коротко</h3>
+      <p><span class="a">Cloud</span> — проще и сильнее «из коробки».<br>
+      <span class="g">Local</span> — дешевле, автономнее и контролируемее.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 4. OPEN SOURCE VS PROPRIETARY ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">03_open_vs_proprietary.md</span></div>
+    <div class="term-body">
+      <h2>Open source LLM vs proprietary LLM</h2>
+      <div class="cols">
+        <div class="col box">
+          <div class="box-title">open source / open-weight</div>
+          <ul class="tree">
+            <li>веса доступны для скачивания;</li>
+            <li>можно запускать локально;</li>
+            <li>можно использовать разные runtime;</li>
+            <li>часто можно дорабатывать и квантовать.</li>
+          </ul>
+        </div>
+        <div class="col box">
+          <div class="box-title">proprietary</div>
+          <ul class="tree">
+            <li>модель и веса закрыты;</li>
+            <li>доступ обычно только через API;</li>
+            <li>меньше свободы;</li>
+            <li>часто выше качество у топовых моделей.</li>
+          </ul>
+        </div>
+      </div>
+      <h3>Вывод</h3>
+      <p><span class="g">Open-weight модели — основа local LLM.</span><br>
+      Proprietary — чаще cloud-first история.</p>
+      <p class="note">Llama · Qwen · Mistral (Apache 2.0) · Gemma · Phi · DeepSeek — открытые веса; GPT / Claude / Gemini — закрытые.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 5. ЗАЧЕМ В 2026 ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">04_why_2026.md</span></div>
+    <div class="term-body">
+      <h2>Зачем local LLM в 2026</h2>
+      <p>Local LLM уже используют для:</p>
+      <ul class="tree">
+        <li><b>code assistant</b> — автодополнение и генерация кода;</li>
+        <li><b>RAG</b> по внутренним документам;</li>
+        <li>офлайн-ботов;</li>
+        <li>корпоративных ассистентов;</li>
+        <li>edge / industrial сценариев;</li>
+        <li>прототипирования без расходов на API.</li>
+      </ul>
+      <pre><span class="c"># типичный dev-workflow: свой сервер вместо платного API</span>
+$ <span class="g">OLLAMA_HOST=0.0.0.0 ollama serve</span>
+$ <span class="g">curl localhost:11434/v1/chat/completions ...</span>  <span class="c"># OpenAI-совместимый API</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 6. КВАНТОВАНИЕ ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">05_quantization.md</span></div>
+    <div class="term-body">
+      <h2>Квантование (quantization)</h2>
+      <p><b>Quantization</b> — сжатие весов модели, чтобы она занимала меньше памяти и запускалась быстрее.</p>
+      <h3>Типичные уровни</h3>
+      <ul class="tree">
+        <li><b>FP16</b> — больше памяти, выше качество;</li>
+        <li><b>INT8</b> — компромисс;</li>
+        <li><b>4-bit</b> — самый популярный баланс для local LLM;</li>
+        <li><b>3-bit и ниже</b> — ещё меньше памяти, но качество падает.</li>
+      </ul>
+      <div class="box">
+        <div class="box-title">практика</div>
+        <p>Для локального запуска чаще всего берут <code>Q4_K_M</code> или похожие 4-bit варианты.</p>
+        <p class="dim">Qwen2.5-7B: FP16 ≈ 15.2 ГБ → Q4_K_M ≈ <span class="g">4.7 ГБ</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 7. ПОЧЕМУ КВАНТОВАНИЕ ВАЖНО ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">06_why_quantization_matters.md</span></div>
+    <div class="term-body">
+      <h2>Почему квантование важно</h2>
+      <div class="cols">
+        <div class="col box">
+          <div class="box-title">без квантования</div>
+          <ul class="tree">
+            <li>модель может не поместиться в память;</li>
+            <li>inference будет слишком медленным;</li>
+            <li>стоимость железа резко растёт.</li>
+          </ul>
+        </div>
+        <div class="col box">
+          <div class="box-title">с квантованием</div>
+          <ul class="tree">
+            <li>модель запускается на более доступном железе;</li>
+            <li>можно работать на CPU, iGPU, NPU или consumer GPU;</li>
+            <li>проще масштабировать на офисные машины.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note">Малые модели (1–3B) теряют от квантования сильнее, чем 7B+. Правило: 7B в 4-bit обычно лучше, чем 3B в FP16.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 8. HARDWARE REQUIREMENTS ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">07_hardware.md</span></div>
+    <div class="term-body">
+      <h2>Hardware requirements</h2>
+      <p>Ориентиры для local LLM (в 4-bit / Q4_K_M):</p>
+      <table>
+        <tr><th>Класс модели</th><th>Что нужно примерно</th><th>Железо</th><th>Примеры задач</th></tr>
+        <tr><td><b>&lt;2B</b></td><td>4–8 GB RAM/VRAM</td><td>любой CPU, iGPU, смартфон</td><td>автодополнение, простые ассистенты</td></tr>
+        <tr><td><b>&lt;7B</b></td><td>8–16 GB RAM/VRAM</td><td>CPU 6+ ядер / GPU 6–8 GB</td><td>повседневный чат, RAG, суммаризация</td></tr>
+        <tr><td><b>&lt;13B</b></td><td>16–32 GB RAM/VRAM</td><td>GPU 10–12 GB VRAM желателен</td><td>более сильное reasoning, код, длинные документы</td></tr>
+      </table>
+      <ul class="tree">
+        <li>+1–2 ГБ на контекстное окно (8–32K токенов);</li>
+        <li>скорость растёт от DDR5, AVX2/AVX-512 и NPU (Intel Core Ultra).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 9. BEST LOCAL LLM ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">08_best_models.md</span></div>
+    <div class="term-body">
+      <h2>Best local LLM по классам</h2>
+      <p>Рекомендуемые варианты по состоянию на 2026:</p>
+      <ul class="tree">
+        <li><b>До 2B:</b> Phi-family, Gemma mini-класс;</li>
+        <li><b>До 7B:</b> Qwen, Llama, Gemma, Mistral small-класс;</li>
+        <li><b>До 13B:</b> Qwen 14B-класс, Llama 8B/13B-класс, Mistral Small 3.x-класс.</li>
+      </ul>
+      <h3>Если нужен практический выбор</h3>
+      <ul class="tree">
+        <li>для общего чата — <b class="g">Qwen</b>;</li>
+        <li>для кода — <b class="g">Qwen</b> или <b class="g">DeepSeek-distill</b>;</li>
+        <li>для лёгких устройств — <b class="g">Phi</b> или <b class="g">Gemma</b>;</li>
+        <li>для универсального use-case — <b class="g">Llama</b>.</li>
+      </ul>
+      <p class="note">Лидеры меняются каждый квартал — сверяйтесь с Open LLM Leaderboard (ссылка в материалах).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 10. КАК ВЫБРАТЬ МОДЕЛЬ ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">09_how_to_choose.md</span></div>
+    <div class="term-body">
+      <h2>Как выбрать модель</h2>
+      <p>Смотрите на 5 вещей:</p>
+      <ol>
+        <li>размер модели;</li>
+        <li>квантование;</li>
+        <li>контекстное окно;</li>
+        <li>лицензию;</li>
+        <li>поддержку в runtime.</li>
+      </ol>
+      <div class="box">
+        <div class="box-title">правило</div>
+        <ul class="tree">
+          <li>сначала проверяйте, <b>помещается</b> ли модель;</li>
+          <li>потом — качество;</li>
+          <li>потом — скорость;</li>
+          <li>потом — удобство запуска.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 11. RUNTIME И ОБОЛОЧКИ ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">10_runtimes.md</span></div>
+    <div class="term-body">
+      <h2>Топовые runtime и оболочки</h2>
+      <div class="cols">
+        <div class="col">
+          <div class="box"><div class="box-title">LM Studio</div>
+            <ul class="tree"><li>лучший GUI для старта;</li><li>удобно сравнивать модели;</li><li>простой локальный сервер.</li></ul></div>
+          <div class="box"><div class="box-title">Ollama</div>
+            <ul class="tree"><li>удобен для CLI и автоматизации;</li><li>быстро стартует;</li><li>хороший вариант для dev workflow.</li></ul></div>
+          <div class="box"><div class="box-title">Llama.cpp</div>
+            <ul class="tree"><li>базовый движок;</li><li>максимум контроля;</li><li>хорош для CPU и GGUF.</li></ul></div>
+        </div>
+        <div class="col">
+          <div class="box"><div class="box-title">ONNX</div>
+            <ul class="tree"><li>формат и экосистема для интеграции;</li><li>полезен в enterprise-пайплайнах.</li></ul></div>
+          <div class="box"><div class="box-title">OpenVINO</div>
+            <ul class="tree"><li>сильный вариант для Intel CPU/GPU/NPU;</li><li>хорош для оптимизации и продакшна.</li></ul></div>
+          <div class="box"><div class="box-title">OVMS</div>
+            <ul class="tree"><li>серверный вариант для масштабируемого локального инференса.</li></ul></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 12. LM STUDIO SETUP ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">11_setup_lmstudio.md</span></div>
+    <div class="term-body">
+      <h2>Как настроить local LLM в LM Studio</h2>
+      <div class="cols">
+        <div class="col">
+          <h3>Шаги</h3>
+          <ol>
+            <li>установить <b>LM Studio</b> (lmstudio.ai);</li>
+            <li>открыть каталог моделей;</li>
+            <li>выбрать GGUF-модель;</li>
+            <li>скачать нужную квантованную версию (Q4_K_M);</li>
+            <li>загрузить модель;</li>
+            <li>включить local server;</li>
+            <li>подключить приложение через <code>localhost</code>.</li>
+          </ol>
+        </div>
+        <div class="col">
+          <div class="box">
+            <div class="box-title">плюс</div>
+            <ul class="tree">
+              <li>удобно тестировать разные модели;</li>
+              <li>легко сравнивать качество;</li>
+              <li>не нужен терминал.</li>
+            </ul>
+          </div>
+          <pre><span class="c"># CLI опционально</span>
+$ <span class="g">lms server start</span>
+$ <span class="g">lms load qwen2.5-7b-instruct</span>
+<span class="c"># сервер: http://localhost:1234/v1</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 13. OLLAMA SETUP ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">12_setup_ollama.md</span></div>
+    <div class="term-body">
+      <h2>Как настроить local LLM в Ollama</h2>
+      <div class="cols">
+        <div class="col">
+          <h3>Шаги</h3>
+          <ol>
+            <li>установить <b>Ollama</b>;</li>
+            <li>выполнить pull модели;</li>
+            <li>запустить модель;</li>
+            <li>при необходимости создать свой <code>Modelfile</code>;</li>
+            <li>использовать локальный API.</li>
+          </ol>
+          <div class="box">
+            <div class="box-title">плюс</div>
+            <ul class="tree">
+              <li>очень просто;</li>
+              <li>удобно для автоматизации;</li>
+              <li>хороший путь для dev и прототипов.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="col">
+          <pre><span class="c"># установка (Linux/macOS)</span>
+$ <span class="g">curl -fsSL https://ollama.com/install.sh | sh</span>
+
+<span class="c"># скачать и запустить модель</span>
+$ <span class="g">ollama run qwen2.5:7b</span>
+$ <span class="g">ollama run llama3.2:1b</span>   <span class="c"># для слабого железа</span>
+
+<span class="c"># список моделей</span>
+$ <span class="g">ollama list</span>
+
+<span class="c"># OpenAI-совместимый API</span>
+<span class="a">http://localhost:11434/v1</span></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 14. OPENVINO ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">13_intel_openvino.md</span></div>
+    <div class="term-body">
+      <h2>Intel stack: OpenVINO</h2>
+      <p><b>OpenVINO</b> — ключевой стек для Intel.</p>
+      <h3>Он нужен, когда вы хотите</h3>
+      <ul class="tree">
+        <li>ускорить inference на Intel CPU / GPU / NPU;</li>
+        <li>оптимизировать deployment;</li>
+        <li>работать с моделями из ONNX и других фреймворков;</li>
+        <li>получить стабильную производительность на Intel hardware.</li>
+      </ul>
+      <pre><span class="c"># pip install openvino-genai nncf optimum-intel</span>
+<span class="c"># конвертация + INT4-квантизация</span>
+$ <span class="g">optimum-cli export openvino --model Qwen/Qwen2.5-7B-Instruct \
+    --weight-format int4 qwen2.5-7b-ov</span>
+
+<span class="c"># инференс: device="CPU" / "GPU" / "NPU"</span>
+<span class="a">pipe = openvino_genai.LLMPipeline("qwen2.5-7b-ov", device="GPU")</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 15. OVMS ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">14_intel_ovms.md</span></div>
+    <div class="term-body">
+      <h2>Intel stack: OVMS</h2>
+      <p><b>OpenVINO Model Server (OVMS)</b> — сервер для подачи модели через API.</p>
+      <h3>Подходит, если нужно</h3>
+      <ul class="tree">
+        <li>несколько клиентов;</li>
+        <li>API вместо локального чата;</li>
+        <li>серверный сценарий;</li>
+        <li>масштабирование внутри компании.</li>
+      </ul>
+      <pre><span class="c"># запуск LLM-сервера в Docker</span>
+$ <span class="g">docker run -d --rm -p 8000:8000 -v /models:/models:ro \
+    openvino/model-server:latest --model_name qwen \
+    --model_path /models/qwen2.5-7b-ov --task llm</span>
+
+<span class="c"># OpenAI-совместимый REST на :8000/v3, gRPC, метрики Prometheus</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 16. ONNX ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">15_intel_onnx.md</span></div>
+    <div class="term-body">
+      <h2>Intel stack: ONNX</h2>
+      <p><b>ONNX</b> — универсальный формат обмена моделью.</p>
+      <h3>Почему важен</h3>
+      <ul class="tree">
+        <li>удобен для конвертации;</li>
+        <li>хорошо подходит как промежуточный формат;</li>
+        <li>часто используется в enterprise-пайплайнах;</li>
+        <li>совместим с OpenVINO и другими runtime.</li>
+      </ul>
+      <pre><span class="c"># pip install onnxruntime-genai</span>
+$ <span class="g">python model_runner.py --model qwen2.5-onnx --device cpu</span>
+<span class="c"># device: cpu / cuda / dml (DirectML на Windows)</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 17. ТИПОВОЙ PIPELINE ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">16_pipeline.md</span></div>
+    <div class="term-body">
+      <h2>OpenVINO + ONNX + OVMS: типовой путь</h2>
+      <p>Типовой pipeline:</p>
+      <ol>
+        <li>модель в исходном формате;</li>
+        <li>конвертация в <b>ONNX</b>;</li>
+        <li>оптимизация через <b>OpenVINO</b>;</li>
+        <li>запуск локально или через <b>OVMS</b>;</li>
+        <li>подключение клиента через API.</li>
+      </ol>
+      <pre><span class="a">[исходная модель]</span> ──&gt; <span class="g">ONNX</span> ──&gt; <span class="g">OpenVINO IR (INT4/INT8)</span> ──┬──&gt; локальное приложение
+                                                              └──&gt; <span class="g">OVMS :8000/v3</span> ──&gt; N клиентов</pre>
+      <p class="note">OpenVINO читает ONNX напрямую — конвертация часто занимает одну команду.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 18. СРАВНЕНИЕ RUNTIME ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">17_runtime_compare.md</span></div>
+    <div class="term-body">
+      <h2>Сравнение runtime</h2>
+      <table>
+        <tr><th>Решение</th><th>Сильные стороны</th><th>Лучше всего для</th></tr>
+        <tr><td><b>LM Studio</b></td><td>GUI, простота, сравнение моделей</td><td>новичков и тестирования</td></tr>
+        <tr><td><b>Ollama</b></td><td>CLI, автоматизация, быстрый старт</td><td>разработчиков</td></tr>
+        <tr><td><b>Llama.cpp</b></td><td>контроль, лёгкость, переносимость</td><td>энтузиастов и продвинутых</td></tr>
+        <tr><td><b>OpenVINO</b></td><td>Intel-оптимизация, performance</td><td>Intel hardware</td></tr>
+        <tr><td><b>OVMS</b></td><td>server/API, масштабирование</td><td>enterprise и shared access</td></tr>
+        <tr><td><b>ONNX</b></td><td>переносимость формата</td><td>интеграции и deployment</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 19. КАК СРАВНИВАТЬ МОДЕЛИ ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">18_model_compare.md</span></div>
+    <div class="term-body">
+      <h2>Как сравнивать модели между собой</h2>
+      <p>Сравнивайте не только «умность», но и:</p>
+      <ul class="tree">
+        <li>качество ответов;</li>
+        <li>скорость генерации (tok/s);</li>
+        <li>память;</li>
+        <li>длину контекста;</li>
+        <li>поддержку tool use;</li>
+        <li>multilingual performance;</li>
+        <li>качество кода.</li>
+      </ul>
+      <div class="box">
+        <div class="box-title">для реальной оценки делайте тест</div>
+        <ul class="tree">
+          <li>3–5 одинаковых промптов;</li>
+          <li>одинаковое квантование;</li>
+          <li>одинаковое железо;</li>
+          <li>одинаковый context length.</li>
+        </ul>
+      </div>
+      <p class="note">Бенчмарки: Open LLM Leaderboard, Artificial Analysis, LMArena — ссылки в материалах.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 20. БУДУЩЕЕ ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">19_future.md</span></div>
+    <div class="term-body">
+      <h2>Будущее local LLM</h2>
+      <p>Что будет дальше:</p>
+      <ul class="tree">
+        <li>больше моделей под 3B–8B;</li>
+        <li>лучшее квантование;</li>
+        <li>рост роли NPU;</li>
+        <li>локальные multimodal модели;</li>
+        <li>больше enterprise deployment без облака;</li>
+        <li>проще запуск «одной кнопкой».</li>
+      </ul>
+      <pre><span class="c"># прогноз 2026 → 2027</span>
+$ <span class="g">tail -f /var/log/industry.log</span>
+<span class="a">npu-on-every-laptop, 4b-beats-13b-2024, agentic-local-first ...</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 21. ГДЕ ПОЛЕЗЕН ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">20_use_cases.md</span></div>
+    <div class="term-body">
+      <h2>Где local LLM особенно полезен</h2>
+      <ul class="tree">
+        <li>офисные ассистенты;</li>
+        <li>внутренние базы знаний;</li>
+        <li>юридические и HR документы;</li>
+        <li>code review;</li>
+        <li>support automation;</li>
+        <li>промышленность и edge;</li>
+        <li>автономные устройства;</li>
+        <li>закрытые сети.</li>
+      </ul>
+      <p class="note">Общий знаменатель: данные, которые не должны покидать контур организации или устройства.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 22. МАТЕРИАЛЫ ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">21_materials.md</span></div>
+    <div class="term-body">
+      <h2>Материалы из интернета</h2>
+      <div class="cols">
+        <div class="col">
+          <h3>Инструменты</h3>
+          <ul class="tree">
+            <li><a href="https://ollama.com">ollama.com</a> · <a href="https://github.com/ollama/ollama">github.com/ollama/ollama</a></li>
+            <li><a href="https://lmstudio.ai">lmstudio.ai</a></li>
+            <li><a href="https://github.com/ggml-org/llama.cpp">github.com/ggml-org/llama.cpp</a></li>
+            <li><a href="https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/overview.html">OpenVINO Toolkit</a> · <a href="https://github.com/openvinotoolkit/openvino">github.com/openvinotoolkit/openvino</a></li>
+            <li><a href="https://github.com/openvinotoolkit/model_server">OVMS — OpenVINO Model Server</a></li>
+            <li><a href="https://onnxruntime.ai">onnxruntime.ai</a> · <a href="https://github.com/microsoft/onnxruntime-genai">onnxruntime-genai</a></li>
+          </ul>
+          <h3>Модели</h3>
+          <ul class="tree">
+            <li><a href="https://huggingface.co/models?pipeline_tag=text-generation">Hugging Face: text-generation</a></li>
+            <li><a href="https://ollama.com/library">Библиотека моделей Ollama</a></li>
+            <li><a href="https://huggingface.co/docs/optimum/intel/index">Optimum-Intel</a></li>
+          </ul>
+        </div>
+        <div class="col">
+          <h3>Бенчмарки</h3>
+          <ul class="tree">
+            <li><a href="https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard">Open LLM Leaderboard</a></li>
+            <li><a href="https://artificialanalysis.ai">Artificial Analysis</a></li>
+            <li><a href="https://lmarena.ai">LMArena</a></li>
+          </ul>
+          <h3>Гайды</h3>
+          <ul class="tree">
+            <li><a href="https://docs.openvino.ai">docs.openvino.ai</a> — GenAI-туториалы</li>
+            <li><a href="https://learn.microsoft.com/en-us/windows/ai/">Windows AI / ONNX docs</a></li>
+            <li><a href="https://ollama.com/blog">Ollama Blog</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="note">Ссылки ведут на официальные ресурсы; актуальные версии и модели проверяйте перед выступлением.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 23. ИТОГ ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">22_summary.md</span></div>
+    <div class="term-body">
+      <h2>Итог</h2>
+      <p class="g">Local LLM уже не эксперимент.</p>
+      <p>Это практичный инструмент, если вам важны:</p>
+      <ul class="tree">
+        <li>контроль;</li>
+        <li>офлайн;</li>
+        <li>стоимость;</li>
+        <li>скорость;</li>
+        <li>локальная интеграция.</li>
+      </ul>
+      <div class="box">
+        <div class="box-title">главная мысль</div>
+        <p><span class="a">Cloud</span> — для максимального качества и простоты.<br>
+        <span class="g">Local</span> — для контроля, автономности и инженерной гибкости.</p>
+      </div>
+      <pre>$ <span class="g">exit</span>
+<span class="c"># вопросы?</span> <span class="cursor"></span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- статус-бар как в tmux -->
+<div class="statusbar">
+  <span class="session">[local-llm]</span>
+  <span id="counter">1/23</span>
+  <span id="bar" class="g"></span>
+  <span class="seg">←→/Space/PgUp·PgDn — навигация · P — печать в PDF</span>
+  <span class="nav">
+    <button onclick="nav(-1)">prev</button>
+    <button onclick="nav(1)">next</button>
+  </span>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const W = 24; // ширина прогресс-бара в блоках
+  let i = 0;
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    document.getElementById('counter').textContent = (i + 1) + '/' + slides.length;
+    const filled = Math.round((i + 1) / slides.length * W);
+    document.getElementById('bar').textContent = '▮'.repeat(filled) + '▯'.repeat(W - filled);
+  }
+  function nav(d) { show(i + d); }
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); nav(1); }
+    if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); nav(-1); }
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End') show(slides.length - 1);
+    if (e.key.toLowerCase() === 'p') window.print();
+  });
+  show(0);
+</script>
+</body>
+</html>
