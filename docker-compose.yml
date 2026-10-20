@@ -1,0 +1,60 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# LLM-стек для хакатона: llama.cpp + opencode, OpenAI-совместимый API :8000.
+# Модель запечена в образ на этапе сборки (в ./Dockerfile).
+#
+#   Вариант A — Gemma 4 E2B (Q4_0, 2.84GB):
+#     docker compose --profile llama up -d
+#
+#   Вариант B — минимальный размер <1GB: Llama 3.2 1B Instruct (Q4_0, 773MB):
+#     docker compose --profile tiny up -d
+#
+#   В обоих случаях:
+#     docker compose run --rm opencode
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  # ── llama.cpp: Gemma 4 E2B (Q4_0, 2.84GB baked-in) ──
+  llama:
+    build:
+      context: .
+    image: hackathon-gemma
+    container_name: hackathon-llama
+    profiles: ["llama"]
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_ALIAS: "gemma-4-E2B-it-Q4_0"
+      # размер контекста и потоков CPU для llama-server
+      CONTEXT: "8192"
+      THREADS: "0"
+
+  # ── llama.cpp: минимальный размер <1GB ──
+  # Llama 3.2 1B Instruct, квант Q4_0 (773MB). Образ собирается тем же
+  # Dockerfile — модель и имя подменяются через build args / env.
+  llama-tiny:
+    build:
+      context: .
+      args:
+        MODEL_URL: https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf
+    image: hackathon-gemma-tiny
+    container_name: hackathon-llama-tiny
+    profiles: ["tiny"]
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_ALIAS: "llama-3.2-1b-instruct"
+      CONTEXT: "8192"
+      THREADS: "0"
+
+  # ── opencode: AI-агент в терминале, подключён к llama.cpp через порт 8000 ──
+  # host network: внутри контейнера LLM доступен как http://localhost:8000
+  opencode:
+    image: ghcr.io/anomalyco/opencode:latest
+    container_name: hackathon-opencode
+    network_mode: host
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - ./.config/opencode:/root/.config/opencode
