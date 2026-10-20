@@ -23,10 +23,15 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MODEL_ALIAS: "gemma-4-E2B-it-Q4_0"
-      # размер контекста и потоков CPU для llama-server
-      CONTEXT: "8192"
-      THREADS: "0"
+      # ENTRYPOINT = /app/llama-server, конфиг только через LLAMA_ARG_*:
+      LLAMA_ARG_ALIAS: "gemma-4-E2B-it-Q4_0"
+      LLAMA_ARG_CTX_SIZE: "8192"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 10m
 
   # ── llama.cpp: минимальный размер <1GB ──
   # Llama 3.2 1B Instruct, квант Q4_0 (773MB). Образ собирается тем же
@@ -42,9 +47,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MODEL_ALIAS: "llama-3.2-1b-instruct"
-      CONTEXT: "8192"
-      THREADS: "0"
+      LLAMA_ARG_ALIAS: "llama-3.2-1b-instruct"
+      LLAMA_ARG_CTX_SIZE: "8192"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 10m
 
   # ── opencode: AI-агент в терминале, подключён к llama.cpp через порт 8000 ──
   # host network: внутри контейнера LLM доступен как http://localhost:8000

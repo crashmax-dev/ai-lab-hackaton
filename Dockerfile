@@ -3,14 +3,10 @@
 # LLM-образ хакатона: модель запечена в образ, инференс — llama.cpp.
 # По умолчанию — Gemma 4 E2B (Q4_0, 2.84GB); крошечный вариант (<1GB)
 # собирается из docker-compose профиля tiny (Llama 3.2 1B Instruct, 773MB).
-# Продает OpenAI-совместимый API на порту 8000 (готово для opencode: /v1).
+# Открывает OpenAI-совместимый API на порту 8000 (готово для opencode: /v1).
 #
 #   docker build -t hackathon-gemma .
 #   docker run -d --rm -p 8000:8000 hackathon-gemma
-#
-# NOTE: «ультра-компактная ~1.2GB» версия E2B не существует отдельно от draft
-# (см. rasyosef dspark — это draft для speculative decoding). Минимальный
-# standalone-квант — Q4_0 (2.84 GB). Более качественный: Q8_0 (4.97 GB).
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Этап 1: Скачивание модели (кэшируется как слой образа) ---
@@ -24,22 +20,22 @@ ARG MODEL_URL=https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/g
 RUN curl -fL --retry 3 -o model.gguf "${MODEL_URL}"
 
 # --- Этап 2: Легковесный образ для инференса ---
-# Официальный образ llama.cpp: полноценный OpenAI-совместимый сервер на :8080
+# ВАЖНО: у образа llama.cpp:server ENTRYPOINT = /app/llama-server, поэтому
+# CMD не может быть shell-скриптом — всё задаётся LLAMA_ARG_* (из common/arg.cpp
+# llama.cpp): LLAMA_ARG_MODEL, LLAMA_ARG_ALIAS, LLAMA_ARG_HOST,
+# LLAMA_ARG_PORT, LLAMA_ARG_CTX_SIZE, LLAMA_ARG_THREADS и т.д.
 FROM ghcr.io/ggml-org/llama.cpp:server
 
 COPY --from=downloader /model/model.gguf /model/model.gguf
 
-ENV CONTEXT=8192 \
-    THREADS=0 \
-    MODEL_ALIAS=gemma-4-E2B-it-Q4_0
+ENV LLAMA_ARG_MODEL=/model/model.gguf \
+    LLAMA_ARG_HOST=0.0.0.0 \
+    LLAMA_ARG_PORT=8000 \
+    LLAMA_ARG_CTX_SIZE=8192 \
+    LLAMA_ARG_ALIAS=gemma-4-E2B-it-Q4_0
 
-# llama-server: OpenAI-compatible /v1/chat/completions, web UI на /
-CMD ["sh", "-c", "llama-server \
-    --model /model/model.gguf \
-    --alias ${MODEL_ALIAS} \
-    --host 0.0.0.0 --port 8000 \
-    --threads ${THREADS:-0} \
-    --ctx-size ${CONTEXT:-8192} \
-    --mlock"]
+# Явные не-пустые CMD перекрывают базовый и гарантированно не путаются
+# llama-server как аргументы (пустой CMD ненадёжен из-за наследования базы).
+CMD ["--host", "0.0.0.0", "--port", "8000"]
 
 EXPOSE 8000
