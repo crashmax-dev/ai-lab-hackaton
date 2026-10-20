@@ -735,10 +735,39 @@ $ <span class="g">tail -f /var/log/industry.log</span>
   </div>
 </section>
 
+<!-- ══ 24. ЗАДАНИЕ ХАКАТОНА ══ -->
+<section class="slide">
+  <div class="term">
+    <div class="term-head"><span class="btns">■ ■ ■</span><span class="path">23_task_briefing.md</span></div>
+    <div class="term-body">
+      <h2>Задание хакатона</h2>
+      <p class="g">30 минут: сайт превентивной медицины на Svelte 5 — полностью локально.</p>
+      <ul class="tree">
+        <li><b>без своего сервера</b> — только статика, все запросы к LLM из браузера;</li>
+        <li>форма → персональный план: активность, питание, обследования, сон;</li>
+        <li>API: <code>http://localhost:8000/v1</code> (OpenAI-совместимый), model id — из <code>GET /v1/models</code>;</li>
+        <li>дисклеймер + red flags обрабатываются локально ДО запроса (боль в груди, одышка → совет врача, без генерации);</li>
+        <li>тестовый контракт: <code>health.html</code> + <code>window.__PREVENTIVE_APP__</code> + модули <code>src/lib/{llm,safety}.js</code>;</li>
+        <li>полные правила и критерии оценки — в <code>TASK.md</code>.</li>
+      </ul>
+      <h3>Первые шаги</h3>
+      <pre>$ <span class="g">git clone https://github.com/extube/lllm.git hackathon</span>
+$ <span class="g">cd hackathon</span>
+$ <span class="g">docker compose --profile tiny up -d</span>   <span class="c"># или --profile llama (Gemma 4 E2B)</span>
+$ <span class="g">mkdir ivanov &amp;&amp; cd ivanov</span>              <span class="c"># ← ваша папка (ник латиницей)</span>
+$ <span class="g">npm create vite@latest . -- --template svelte</span> &amp;&amp; <span class="g">npm install</span>
+$ <span class="g">npm run dev</span>                            <span class="c"># http://localhost:5173</span>
+$ <span class="g">bash test/api-smoke.sh</span>                 <span class="c"># LLM отвечает</span>
+$ <span class="g">node test/site.test.mjs http://localhost:5173</span>  <span class="c"># контракт сайта</span>
+$ <span class="c"># ...через fork: Pull Request в extube/lllm (подробно — TASK.md §8)</span></pre>
+    </div>
+  </div>
+</section>
+
 <!-- статус-бар как в tmux -->
 <div class="statusbar">
   <span class="session">[local-llm]</span>
-  <span id="counter">1/23</span>
+  <span id="counter">1/24</span>
   <span id="bar" class="g"></span>
   <span class="seg">←→/Space/PgUp·PgDn — навигация · P — печать в PDF</span>
   <span class="nav">
