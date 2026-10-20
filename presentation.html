@@ -744,7 +744,7 @@ $ <span class="g">tail -f /var/log/industry.log</span>
       <p class="g">30 минут: сайт превентивной медицины — один файл index.html, ничего не устанавливаем.</p>
       <ul class="tree">
         <li><b>одностраничник</b>: HTML + CSS + JS внутри одного файла — без сервера, без npm/Node.js;</li>
-        <li>шаблон <code>example/index.html</code>: метки «LLM: ПОДКЛЮЧЕНИЕ» и «LLM: ПРОМПТ» — копируйте и меняйте;</li>
+        <li>стартовый скелет <code>example/index.html</code>: LLM-подключение готово, остальное — TODO;</li>
         <li>все запросы к LLM из браузера: <code>localhost:8000/v1</code>, model id — из <code>GET /v1/models</code>;</li>
         <li>дисклеймер + red flags до запроса («боль в груди» → совет врача, без генерации);</li>
         <li>проверка шаблона: <code>bash test/test-example.sh</code> — без LLM, без Node/npm/Python.</li>
@@ -757,7 +757,7 @@ $ <span class="g">mkdir ivanov &amp;&amp; cd ivanov</span>              <span cl
 $ <span class="g">cp ../example/index.html .</span>             <span class="c"># шаблон: меняйте как хотите</span>
 $ <span class="g">curl http://localhost:8000/v1/models</span>   <span class="c"># модель отвечает</span>
 $ <span class="g">bash test/test-example.sh</span>              <span class="c"># шаблон на месте и корректен</span>
-$ <span class="c"># самопроверка: index.html?selftest=1  |  «боль в груди» → баннер врача</span>
+$ <span class="c"># в скелете: LLM-подключение готово, стили/промпт/red flags — TODO</span>
 $ <span class="c"># Pull Request в extube/lllm (инструкция — TASK.md §9)</span></pre>
     </div>
   </div>

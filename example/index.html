@@ -2,24 +2,15 @@
 <html lang="ru">
 <!--
   ════════════════════════════════════════════════════════════════════
-  ПРИМЕР ОДНОСТРАНИЧНОГО САЙТА ДЛЯ ХАКАТОНА (см. TASK.md)
+  ЗАГОТОВКА ДЛЯ ХАКАТОНА (правила — TASK.md). Здесь намеренно минимум.
 
-  Это стартовый шаблон. Скопируйте его в свою папку
-  и меняйте разметку, стили и тексты как хотите.
+  Ваша работа за 30 минут:
+    1) <style>              — пустой, добавьте свои стили (метка ниже);
+    2) "LLM: ПРОМПТ"        — сейчас самая простая версия, напишите свою;
+    3) "SAFETY: RED FLAGS"  — сейчас минимальный список, расширьте его;
+    4) разметка вывода и UX — TODO-комментарии подскажут.
 
-  ДВА ГЛАВНЫХ МЕСТА — ищите в коде комментариев-метки:
-
-  1) "LLM: ПОДКЛЮЧЕНИЕ" — где сайт стучится в локальную модель
-     (BASE_URL, GET /v1/models, POST /v1/chat/completions)
-
-  2) "LLM: ПРОМПТ" — где задаётся системный промпт и собирается
-     запрос к модели (SYSTEM_PROMPT, buildPrompt)
-
-  Остальные места («SAFETY: RED FLAGS», «UI») можно менять свободно,
-  но три правила обязательны (TASK.md §4–6):
-     • все запросы — только на http://localhost:8000/v1;
-     • red flags проверяются ДО отправки запроса к LLM;
-     • дисклеймер остаётся на странице дословно.
+  Трогать не обязательно: блок "LLM: ПОДКЛЮЧЕНИЕ" уже рабочий.
   ════════════════════════════════════════════════════════════════════
 -->
 <head>
@@ -27,86 +18,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Профилактика — локальный LLM</title>
   <style>
-    /* ── UI (можно менять свободно) ─────────────────────────────── */
-    :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --fg:#e6edf3;
-            --dim:#8b949e; --accent:#3fb950; --danger:#f85149; }
-    * { box-sizing:border-box; }
-    body { margin:0; font:16px/1.5 system-ui, sans-serif;
-           background:var(--bg); color:var(--fg); }
-    main { max-width:680px; margin:0 auto; padding:24px 16px; }
-    h1 { font-size:1.5em; } h1 .hint { color:var(--dim); font-size:0.65em; }
-    form { background:var(--card); border:1px solid var(--line);
-           border-radius:8px; padding:16px; margin:16px 0; }
-    label { display:block; margin:12px 0 4px; color:var(--dim); }
-    input, select, textarea { width:100%; padding:8px; color:var(--fg);
-           background:var(--bg); border:1px solid var(--line); border-radius:6px; }
-    .goals label { display:inline-flex; align-items:center; gap:6px;
-           margin:4px 12px 0 0; color:var(--fg); }
-    .goals { padding:12px 0; }
-    button { margin-top:16px; width:100%; padding:10px; font-size:1em;
-           background:var(--accent); color:var(--bg); border:0;
-           border-radius:6px; font-weight:600; cursor:pointer; }
-    button:disabled { opacity:.5; cursor:progress; }
-    #banner { display:none; background:var(--danger); color:var(--bg);
-           padding:12px; border-radius:8px; font-weight:600; margin:16px 0; }
-    #status { color:var(--dim); min-height:1.4em; margin:8px 0; }
-    #plan { white-space:pre-wrap; background:var(--card); padding:16px;
-           border:1px solid var(--line); border-radius:8px; display:none; }
-    #selftest { margin-top:24px; color:var(--dim); }
-    footer { text-align:center; padding:16px; color:var(--accent); }
+    /* TODO: ваши стили здесь */
   </style>
 </head>
 <body>
-  <main>
-    <h1>Личный план профилактики <span class="hint">— пример, отредактируйте под себя</span></h1>
+  <h1>Личный план профилактики</h1>
 
-    <div id="banner">⚠ Немедленно обратитесь к врачу (103 / 112): описаны тревожные симптомы</div>
+  <div id="banner" style="display:none">Обратитесь к врачу (103): тревожные симптомы</div>
 
-    <form id="fh">
-      <label for="age">Возраст</label>
-      <input id="age" type="number" min="1" max="120" value="35" required>
-
-      <label for="activity">Уровень активности</label>
+  <form id="fh">
+    <label>Возраст <input id="age" type="number" value="35" min="1" max="120" required></label>
+    <label>Активность
       <select id="activity">
         <option>низкий</option><option selected>средний</option><option>высокий</option>
       </select>
+    </label>
+    <label><input type="checkbox" name="goal" value="движение"> движение</label>
+    <label><input type="checkbox" name="goal" value="питание"> питание</label>
+    <label><input type="checkbox" name="goal" value="обследования"> обследования</label>
+    <label><input type="checkbox" name="goal" value="сон"> сон</label>
+    <label>Жалобы и образ жизни <textarea id="notes"></textarea></label>
+    <button id="go">Составить план</button>
+  </form>
 
-      <div class="goals" role="group" aria-label="Цели профилактики">
-        <label><input type="checkbox" name="goal" value="двигательная активность" checked>движение</label>
-        <label><input type="checkbox" name="goal" value="питание">питание</label>
-        <label><input type="checkbox" name="goal" value="профилактические обследования">обследования</label>
-        <label><input type="checkbox" name="goal" value="сон">сон</label>
-      </div>
-
-      <label for="notes">Самочувствие, жалобы, образ жизни</label>
-      <textarea id="notes" rows="3" placeholder="например: много сижу у компьютера, иногда болит спина"></textarea>
-
-      <button id="go">Составить план</button>
-    </form>
-
-    <div id="status"></div>
-    <div id="plan"></div>
-  </main>
+  <div id="status"></div>
+  <!-- TODO: оформите вывод плана (сейчас просто текст) -->
+  <div id="plan"></div>
 
   <footer>Материал носит образовательный характер и не является медицинской рекомендацией.</footer>
-  <div id="selftest"></div>
 
   <script>
     "use strict";
     // ═══════════════════════════════════════════════════════════════
     // ═══ LLM: ПОДКЛЮЧЕНИЕ ══════════════════════════════════════════
-    // Локальная модель (OpenAI-совместимый API, нужен только localhost).
-    // Измените BASE_URL, только если сервер хакатона на другом адресе.
+    // Локальная модель (OpenAI-совместимый API, только localhost).
+    // Рабочий минимум — менять не обязательно, кроме BASE_URL.
     // ═══════════════════════════════════════════════════════════════
     const BASE_URL = "http://localhost:8000/v1";
 
     // model id узнаём в рантайме: у профилей llama/tiny модели разные.
     async function listModels() {
-      const r = await fetch(BASE_URL + "/models");
-      if (!r.ok) throw new Error("LLM ответил с ошибкой HTTP " + r.status);
-      const j = await r.json();
+      const j = await (await fetch(BASE_URL + "/models")).json();
       const id = j.data && j.data[0] && j.data[0].id;
-      if (!id) throw new Error("LLM не вернул список моделей");
+      if (!id) throw new Error("модель не найдена");
       return id;
     }
 
@@ -114,67 +68,44 @@
       const r = await fetch(BASE_URL + "/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages, temperature: 0.7 })
+        body: JSON.stringify({ model, messages })
       });
-      if (!r.ok) throw new Error("LLM ответил с ошибкой HTTP " + r.status);
-      const j = await r.json();
-      const text = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-      if (!text) throw new Error("Пустой ответ модели");
-      return text;
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return (await r.json()).choices[0].message.content; // TODO: проверьте ответ на пустоту
     }
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ LLM: ПРОМПТ ═══════════════════════════════════════════════
-    // Здесь настраивается характер советов. Пишите по-русски, просите
-    // структурированный план. Диагнозы запрещены системным промптом.
+    // Сейчас минимальный — придумайте свой (по-русски, структурированный
+    // план, без диагнозов и лекарств). Это оценивается жюри.
     // ═══════════════════════════════════════════════════════════════
     const SYSTEM_PROMPT =
-      "Ты — ассистент по профилактике. Составь персональный план в 3–6 пунктов " +
-      "по темам, которые выбрал пользователь: физическая активность, питание, " +
-      "профилактические обследования, режим сна. Только общие рекомендации для " +
-      "здорового человека. Никаких диагнозов и лекарств. Кратко, по-русски, " +
-      "с пояснением «почему это работает».";
+      "Составь персональный план профилактики по целям пользователя."; // TODO: ваш промпт
 
     function buildPrompt(input) {
-      // input = { age, activity, goals: [...], notes }
-      return [
-        "Возраст: " + input.age + " лет.",
-        "Уровень активности: " + input.activity + ".",
-        "Цели профилактики: " + (input.goals.length ? input.goals.join(", ") : "не выбраны") + ".",
-        "Дополнительно: " + (input.notes.trim() || "—"),
-        "",
-        "Составь персональный план профилактики по выбранным целям."
-      ].join("\n");
+      // input = { age, activity, goals, notes }
+      return "Возраст: " + input.age + ". Активность: " + input.activity +
+        ". Цели: " + input.goals.join(", ") + ". " + input.notes; // TODO: соберите подробнее
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // ═══ SAFETY: RED FLAGS (можно расширить список) ════════════════
-    // Проверка выполняется ДО любого запроса к LLM. Совпадение →
-    // совет врача, генерация плана не запускается. (TASK.md §6.2)
+    // ═══ SAFETY: RED FLAGS ═════════════════════════════════════════
+    // Проверка ДО любого запроса к LLM (совпадение → совет врача).
+    // Сейчас минимум — расширьте по списку из TASK.md §6.2.
     // ═══════════════════════════════════════════════════════════════
     const RED_FLAGS = [
-      /бол[ею]т\s+в\s+груд[и]/i,          /боль\s+в\s+груд[и]/i,
-      /одышк/i,                            /кровотечени/i,
-      /потер[яю][л]*\s*сознани/i,          /обморок/i,
-      /суицид|покончить\s+с\s+собой/i,
-      /температур\w*\s+(выше|более)\s+39/i,
-      /острая\s+боль\s+в\s+животе/i,
-      /инсульт|асимметри\w+\s+лица|расстройством?\s+речи/i
+      /боль\s+в\s+груд[и]/i,
+      /суицид|покончить\s+с\s+собой/i
     ];
     function isRedFlag(text) {
-      return RED_FLAGS.some(re => re.test(text));
+      return RED_FLAGS.some(re => re.test(text)); // TODO: расширьте список выше
     }
 
-    // ═══════════════════════ UI (можно менять свободно) ═══════════
+    // ═══════════════ UI (минимум — сделайте свой) ══════════════════
     const $ = id => document.getElementById(id);
-    const DISCLAIMER = "Материал носит образовательный характер и не является медицинской рекомендацией.";
 
     $("fh").addEventListener("submit", async ev => {
       ev.preventDefault();
-      $("banner").style.display = "none";
-      $("plan").style.display = "none";
-      $("status").textContent = "";
-
       const input = {
         age: $("age").value,
         activity: $("activity").value,
@@ -182,55 +113,30 @@
         notes: $("notes").value
       };
 
-      // 1) red flags — до обращения к модели:
+      // red flags — до обращения к модели:
       if (isRedFlag(input.notes)) {
         $("banner").style.display = "block";
         return;
       }
-
-      // 2) запрос к локальному LLM (см. «LLM: ПОДКЛЮЧЕНИЕ»):
+      $("banner").style.display = "none";
+      $("plan").textContent = "";
       $("go").disabled = true;
-      $("status").textContent = "Готовлю запрос и жду локальную модель — это может занять десятки секунд…";
+      $("status").textContent = "Ждём локальную модель — это может занять десятки секунд…";
+
       try {
         const model = await listModels();
         const reply = await chat(model, [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: buildPrompt(input) }
         ]);
-        $("plan").textContent = reply;
-        $("plan").style.display = "block";
+        $("plan").textContent = reply; // TODO: оформите красивый вывод
         $("status").textContent = "";
       } catch (err) {
-        $("status").textContent = "Не получилось: " + err.message +
-          " — проверьте, что LLM запущен на " + BASE_URL + " (curl " + BASE_URL + "/models).";
+        $("status").textContent = "Ошибка: " + err.message + " — LLM запущен на " + BASE_URL + "?";
       } finally {
         $("go").disabled = false;
       }
     });
-
-    // ── Самопроверка: example/index.html?selftest=1 ────────────────
-    // Откройте адрес с этим параметром — страница проверит свои
-    // чистые функции без сети и покажет PASS/FAIL. Это не обязательный
-    // тест, а удобная проверка своей копии сайта (TASK.md §7).
-    if (location.search.includes("selftest=1")) {
-      const checks = [
-        ["isRedFlag: боль в груди", isRedFlag("давит, болит в груди") === true],
-        ["isRedFlag: суицид", isRedFlag("думаю покончить с собой") === true],
-        ["isRedFlag: обычный текст", isRedFlag("иногда болит спина") === false],
-        ["buildPrompt: возраст", buildPrompt({age:42, activity:"низкий", goals:["сон","питание"], notes:""}).includes("42")],
-        ["buildPrompt: цели", buildPrompt({age:42, activity:"низкий", goals:["сон","питание"], notes:""}).includes("сон, питание")],
-        ["дисклеймер дословно", document.body.textContent.includes(DISCLAIMER)],
-        ["форма есть", !!document.querySelector("form")],
-        ["инпут возраст", !!document.querySelector("#age")],
-        ["чекбокс цели", document.querySelectorAll("input[name=goal]").length === 4]
-      ];
-      const bad = checks.filter(c => !c[1]);
-      const box = $("selftest");
-      box.innerHTML = "<ul>" + checks.map(c =>
-        "<li>" + (c[1] ? "PASS" : "FAIL") + " — " + c[0] + "</li>").join("") + "</ul>";
-      box.textContent += "SELFTEST " + (bad.length ? "FAILED" : "PASSED");
-      box.style.color = bad.length ? "var(--danger)" : "var(--accent)";
-    }
   </script>
 </body>
 </html>

@@ -21,17 +21,15 @@ check() {
 
 check 'LLM: ПОДКЛЮЧЕНИЕ'  "метка подключения LLM ('LLM: ПОДКЛЮЧЕНИЕ')"
 check 'localhost:8000/v1' "LLM адрес localhost:8000/v1"
-check '/v1/models'        "runtime-запрос GET /v1/models (model id в рантайме)"
+check '/models'          "runtime-запрос GET /v1/models (model id в рантайме)"
 check 'chat/completions'  "POST /v1/chat/completions"
 check 'LLM: ПРОМПТ'       "метка промпта ('LLM: ПРОМПТ')"
 check 'SYSTEM_PROMPT'     "системный промпт"
 check 'buildPrompt'       "сборка промпта из формы (buildPrompt)"
 check 'SAFETY: RED FLAGS' "блок red flags"
 check 'isRedFlag'         "локальная функция isRedFlag"
-check 'боль в груди'      "red flag: боль в груди"
-check 'одышк'             "red flag: одышка"
-check 'суицид'            "red flag: суицидальные мысли"
-check 'banner'            "баннера 'совет врача'"
+check 'груд'             "red flag: боль в груди"
+check 'banner'            "баннер 'совет врача'"
 check '103'               "номер экстренной службы (103) в баннере"
 check 'Материал носит образовательный характер и не является медицинской рекомендацией.' \
                           "дисклеймер дословно"
@@ -39,7 +37,7 @@ check '<form'             "форма на странице"
 check '<textarea'         "поле жалоб (textarea)"
 check '<select'           "уровень активности (select)"
 check 'checkbox'          "цели (мультивыбор)"
-check 'selftest=1'        "регистрация на selftest в браузере"
+check 'TODO'              "TODO-метки для доработки участников"
 
 # Сеть не уходит дальше локали:
 for BAD in 'api.openai.com' 'anthropic' 'googleapis' 'huggingface' 'https://api.'; do

@@ -6,9 +6,6 @@
 bash test/test-example.sh          # чистый sh+grep: без LLM, без Node/npm/Python
 ```
 
-Встроенная самопроверка страницы в браузере (без сети):
-`example/index.html?selftest=1`
-
 Проверки LLM-сервера (опционально, нужен запущенный LLM и curl):
 
 ```bash
