@@ -744,19 +744,20 @@ $ <span class="g">tail -f /var/log/industry.log</span>
       <p class="g">30 минут: сайт превентивной медицины — один файл index.html, ничего не устанавливаем.</p>
       <ul class="tree">
         <li><b>одностраничник</b>: HTML + CSS + JS внутри одного файла — без сервера, без npm/Node.js;</li>
-        <li>форма → персональный план: активность, питание, обследования, сон;</li>
-        <li>все запросы к LLM из браузера: <code>http://localhost:8000/v1</code>, model id — из <code>GET /v1/models</code>;</li>
-        <li>дисклеймер + red flags проверяются локально ДО запроса (боль в груди → совет врача, без генерации);</li>
-        <li>данные не покидают машину; полные правила — в <code>TASK.md</code>.</li>
+        <li>шаблон <code>example/index.html</code>: метки «LLM: ПОДКЛЮЧЕНИЕ» и «LLM: ПРОМПТ» — копируйте и меняйте;</li>
+        <li>все запросы к LLM из браузера: <code>localhost:8000/v1</code>, model id — из <code>GET /v1/models</code>;</li>
+        <li>дисклеймер + red flags до запроса («боль в груди» → совет врача, без генерации);</li>
+        <li>проверка шаблона: <code>bash test/test-example.sh</code> — без LLM, без Node/npm/Python.</li>
       </ul>
       <h3>Первые шаги</h3>
       <pre>$ <span class="g">git clone https://github.com/extube/lllm.git hackathon</span>
 $ <span class="g">cd hackathon</span>
 $ <span class="g">docker compose --profile tiny up -d</span>    <span class="c"># или --profile llama (Gemma 4 E2B)</span>
 $ <span class="g">mkdir ivanov &amp;&amp; cd ivanov</span>              <span class="c"># ← ваша папка (ник латиницей)</span>
-$ <span class="c"># редактируем index.html и открываем его в браузере</span>
+$ <span class="g">cp ../example/index.html .</span>             <span class="c"># шаблон: меняйте как хотите</span>
 $ <span class="g">curl http://localhost:8000/v1/models</span>   <span class="c"># модель отвечает</span>
-$ <span class="c"># самопроверка: «боль в груди» → баннер врача, без запроса к LLM</span>
+$ <span class="g">bash test/test-example.sh</span>              <span class="c"># шаблон на месте и корректен</span>
+$ <span class="c"># самопроверка: index.html?selftest=1  |  «боль в груди» → баннер врача</span>
 $ <span class="c"># Pull Request в extube/lllm (инструкция — TASK.md §9)</span></pre>
     </div>
   </div>
