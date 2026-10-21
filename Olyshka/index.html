@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ru">
+<!--
+  ════════════════════════════════════════════════════════════════════
+  Личный план профилактики — одностраничник на локальном LLM.
+
+  Правила (TASK.md §4):
+    1) один файл index.html: HTML + CSS + JS, без сборки и зависимостей;
+    2) без backend — всё работает прямо из браузера;
+    3) запросы только на localhost:8000 (локальная модель);
+    4) model id узнаётся в рантайме через GET /v1/models;
+    5) никакие данные не уходят дальше вашей машины.
+
+  Метки ниже: "LLM: ПОДКЛЮЧЕНИЕ", "LLM: ПРОМПТ", "SAFETY: RED FLAGS".
+  ════════════════════════════════════════════════════════════════════
+-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Личный план профилактики — локальный LLM</title>
+  <style>
+    :root {
+      --bg: #f4f7f5;
+      --surface: #ffffff;
+      --surface-2: #eef4f0;
+      --ink: #17241e;
+      --ink-soft: #4a5d54;
+      --line: #d6e2da;
+      --brand: #17806a;
+      --brand-ink: #0e5b4c;
+      --danger: #b3261e;
+      --danger-bg: #fdecea;
+      --warn-bg: #fff5e0;
+      --warn-ink: #8a5b00;
+      --radius: 14px;
+      --shadow: 0 1px 2px rgba(16, 40, 32, .06), 0 12px 28px rgba(16, 40, 32, .07);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e1512;
+        --surface: #16211c;
+        --surface-2: #1d2b25;
+        --ink: #e7f0ea;
+        --ink-soft: #a5bab0;
+        --line: #2a3c34;
+        --brand: #4fd1b0;
+        --brand-ink: #9ff0da;
+        --danger: #ff8b82;
+        --danger-bg: #3a1d1b;
+        --warn-bg: #3a2f14;
+        --warn-ink: #ffd58a;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 28px rgba(0, 0, 0, .35);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { margin: 0; }
+
+    body {
+      background: radial-gradient(1200px 600px at 15% -10%, var(--surface-2), transparent 60%), var(--bg);
+      color: var(--ink);
+      font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      min-height: 100vh;
+      padding: 28px 18px 56px;
+    }
+
+    .wrap { max-width: 820px; margin: 0 auto; }
+
+    header.hero { margin-bottom: 22px; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12.5px; font-weight: 600; letter-spacing: .02em;
+      color: var(--brand-ink);
+      background: color-mix(in srgb, var(--brand) 14%, transparent);
+      border: 1px solid color-mix(in srgb, var(--brand) 32%, transparent);
+      padding: 5px 12px; border-radius: 999px;
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); flex: none; }
+
+    h1 { font-size: clamp(24px, 4vw, 34px); line-height: 1.2; margin: 14px 0 8px; letter-spacing: -.01em; }
+
+    .lede { color: var(--ink-soft); margin: 0; max-width: 62ch; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-top: 22px;
+    }
+
+    .card h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); margin: 0 0 16px; }
+
+    /* ── баннер red flags ── */
+    #banner {
+      display: none;
+      gap: 14px;
+      align-items: flex-start;
+      margin-top: 22px;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      background: var(--danger-bg);
+      border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+      color: var(--ink);
+    }
+    #banner[data-visible="true"] { display: flex; }
+    #banner .icon { font-size: 26px; line-height: 1; }
+    #banner strong { display: block; color: var(--danger); font-size: 17px; margin-bottom: 4px; }
+    #banner p { margin: 0; }
+    #banner .hint { color: var(--ink-soft); font-size: 14px; margin-top: 6px; }
+
+    /* ── форма ── */
+    form { display: grid; gap: 18px; }
+
+    fieldset { border: 0; padding: 0; margin: 0; }
+    legend { font-weight: 600; font-size: 14px; color: var(--ink-soft); padding: 0 0 8px; }
+
+    label.field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+
+    input[type="number"], select, textarea {
+      font: inherit; color: var(--ink);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      width: 100%;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+
+    input[type="number"]:focus-visible, select:focus-visible, textarea:focus-visible,
+    button:focus-visible, .goal:focus-within {
+      outline: 2px solid var(--brand);
+      outline-offset: 2px;
+    }
+
+    .goals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 560px) { .goals { grid-template-columns: 1fr; } }
+
+    .goal {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 11px 13px;
+      font-size: 14.5px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .goal:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--line)); }
+    .goal input { accent-color: var(--brand); width: 17px; height: 17px; flex: none; }
+    .goal:has(input:checked) {
+      border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+      background: color-mix(in srgb, var(--brand) 10%, var(--surface-2));
+    }
+
+    button {
+      font: inherit; font-weight: 650;
+      color: #fff;
+      background: var(--brand);
+      border: 0; border-radius: 10px;
+      padding: 13px 20px;
+      cursor: pointer;
+      transition: filter .15s, transform .05s;
+      justify-self: start;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.06); }
+    button:active:not(:disabled) { transform: translateY(1px); }
+    button:disabled { opacity: .55; cursor: progress; }
+
+    /* ── статус ── */
+    #status { margin-top: 18px; }
+    #status .status-box {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-radius: var(--radius);
+      border: 1px solid var(--line); background: var(--surface-2);
+      font-size: 14.5px;
+    }
+    #status[data-kind="error"] .status-box { background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger) 40%, transparent); color: var(--danger); }
+    #status[data-kind="warn"] .status-box { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn-ink) 40%, transparent); color: var(--warn-ink); }
+    #status[data-kind="ok"] .status-box { background: color-mix(in srgb, var(--brand) 10%, var(--surface-2)); border-color: color-mix(in srgb, var(--brand) 35%, transparent); color: var(--brand-ink); }
+
+    .spinner {
+      width: 18px; height: 18px; flex: none;
+      border: 2.5px solid color-mix(in srgb, var(--brand) 30%, transparent);
+      border-top-color: var(--brand);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+
+    /* ── план ── */
+    #plan:empty { display: none; }
+    #plan { margin-top: 22px; }
+
+    .plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .plan-head h2 { font-size: 21px; margin: 0; letter-spacing: -.01em; }
+    .plan-meta { color: var(--ink-soft); font-size: 13px; }
+
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--brand);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px 20px;
+      margin-top: 14px;
+    }
+    .section h3 { margin: 0 0 10px; font-size: 16.5px; }
+    .section ul { margin: 0; padding-left: 20px; }
+    .section li { margin: 6px 0; }
+    .section p { margin: 6px 0; }
+    .section .icon { margin-right: 8px; }
+
+    .raw {
+      white-space: pre-wrap; word-break: break-word;
+      margin: 0; font: 14.5px/1.65 ui-monospace, "Cascadia Code", Consolas, monospace;
+    }
+
+    .disclaimer {
+      margin-top: 20px;
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      background: var(--warn-bg);
+      border: 1px solid color-mix(in srgb, var(--warn-ink) 32%, transparent);
+      color: var(--ink);
+      font-size: 14px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .disclaimer b { color: var(--warn-ink); }
+
+    footer.privacy {
+      margin-top: 30px; padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--ink-soft); font-size: 13px;
+    }
+    footer.privacy p { margin: 0 0 6px; display: flex; gap: 8px; align-items: baseline; }
+    footer.privacy .disclaimer-line {
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: var(--warn-bg);
+      border: 1px solid color-mix(in srgb, var(--warn-ink) 30%, transparent);
+      display: block;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <span class="pill"><span class="dot" aria-hidden="true"></span> Работает на вашем устройстве — данные никуда не отправляются</span>
+      <h1>Личный план профилактики</h1>
+      <p class="lede">
+        Ответьте на несколько вопросов — локальная модель на вашей машине соберёт персональный
+        профилактический план: активность, питание, обследования и сон.
+      </p>
+    </header>
+
+    <!-- SAFETY: баннер red flags. Показывается ДО обращения к модели и вместо плана. -->
+    <div id="banner" role="alert" aria-live="assertive">
+      <span class="icon" aria-hidden="true">🚨</span>
+      <div>
+        <strong>Немедленно обратитесь к врачу или вызовите 103</strong>
+        <p>Ваше описание содержит тревожные признаки, при которых нужна срочная медицинская помощь, а не профилактический план.</p>
+        <p class="hint">Позвоните по номеру <b>103</b> (скорая помощь) или <b>112</b> (единый номер). Не откладывайте обращение.</p>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2>Анкета</h2>
+      <form id="fh">
+        <div class="row">
+          <label class="field">Возраст
+            <input id="age" type="number" value="35" min="1" max="120" inputmode="numeric" required>
+          </label>
+          <label class="field">Уровень активности
+            <select id="activity">
+              <option value="низкий">низкий — почти нет нагрузок</option>
+              <option value="средний" selected>средний — 1–3 раза в неделю</option>
+              <option value="высокий">высокий — 4+ раз в неделю</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Цели профилактики (можно несколько)</legend>
+          <div class="goals">
+            <label class="goal"><input type="checkbox" name="goal" value="двигательная активность"> Двигательная активность</label>
+            <label class="goal"><input type="checkbox" name="goal" value="питание"> Питание</label>
+            <label class="goal"><input type="checkbox" name="goal" value="профилактические обследования"> Профилактические обследования</label>
+            <label class="goal"><input type="checkbox" name="goal" value="сон"> Сон</label>
+          </div>
+        </fieldset>
+
+        <label class="field">Самочувствие, жалобы, образ жизни
+          <textarea id="notes" placeholder="Например: сижу за компьютером 8 часов, мало сплю, есть лишний вес. Беспокоит ли что-то?"></textarea>
+        </label>
+
+        <button id="go" type="submit">Составить план</button>
+      </form>
+    </section>
+
+    <div id="status" aria-live="polite"></div>
+
+    <div id="plan" aria-live="polite"></div>
+
+    <!-- Обязательный дисклеймер (TASK.md §6.1), дословно и всегда на странице: -->
+    <footer class="privacy">
+      <p class="disclaimer-line">Материал носит образовательный характер и не является медицинской рекомендацией.</p>
+      <p><span aria-hidden="true">🔒</span> <b>Приватность:</b> запросы идут только на <code>localhost:8000</code> — ваши ответы не покидают устройство.</p>
+    </footer>
+  </div>
+
+  <script>
+    "use strict";
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ LLM: ПОДКЛЮЧЕНИЕ ══════════════════════════════════════════
+    // Локальный LLM на OpenAI-совместимом API, только localhost:8000.
+    // Сайт сам определяет сервер по порядку ниже: сначала стандартный
+    // llama.cpp (docker compose --profile llama|tiny), если его нет —
+    // стенд организаторов OVMS; ни один не отвечает → понятная ошибка.
+    // ═══════════════════════════════════════════════════════════════
+    const SERVERS = [
+      { name: "llama.cpp", BASE_URL: "http://localhost:8000/v1" },
+      { name: "OVMS",      BASE_URL: "http://localhost:8000/v3" }
+    ];
+    let SERVER = null;
+
+    // Пробуем серверы по очереди: /models → первый живой, model id — в рантайме.
+    async function getServer() {
+      if (SERVER) return SERVER;
+      for (const s of SERVERS) {
+        try {
+          const r = await fetch(s.BASE_URL + "/models");
+          if (!r.ok) continue;
+          const j = await r.json();
+          const id = j.data && j.data[0] && j.data[0].id;
+          if (id) {
+            SERVER = Object.assign({ modelName: id }, s);
+            return SERVER;
+          }
+        } catch (err) { /* следующий сервер */ }
+      }
+      throw new Error("Локальный LLM недоступен на localhost:8000 (ни llama.cpp, ни OVMS)." +
+        " Запустите модель: docker compose --profile tiny up -d (или --profile llama) — TASK.md §9.");
+    }
+
+    async function chat(messages) {
+      const r = await fetch(SERVER.BASE_URL + "/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: SERVER.modelName, messages, temperature: 0.4 })
+      });
+      if (!r.ok) throw new Error("Сервер модели вернул HTTP " + r.status + " (" + SERVER.name + ").");
+      const data = await r.json();
+      const content = data && data.choices && data.choices[0] &&
+        data.choices[0].message && data.choices[0].message.content;
+      if (!content || !content.trim()) throw new Error("Модель вернула пустой ответ. Попробуйте ещё раз.");
+      return content.trim();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ LLM: ПРОМПТ ═══════════════════════════════════════════════
+    // Роль, границы (без диагнозов и лекарств), жёсткая структура,
+    // привязка к возрасту и целям, в конце — обязательный дисклеймер.
+    // ═══════════════════════════════════════════════════════════════
+    const SYSTEM_PROMPT = [
+      "Ты — ассистент по профилактической медицине. Ты НЕ врач и НЕ ставишь диагнозы.",
+      "Твоя задача — составить безопасный персональный план профилактики, а не лечить.",
+      "",
+      "Строгие правила:",
+      "1. Не назначай лекарства, дозировки и не предлагай отменять уже принимаемые препараты.",
+      "2. Не ставь диагнозов и не интерпретируй симптомы как конкретное заболевание.",
+      "3. Если описание указывает на острое состояние — порекомендуй обратиться к врачу, а не составляй план.",
+      "4. Давай только общие, доказательные и бытовые рекомендации (ВОЗ-подобные ориентиры).",
+      "5. Пиши по-русски, простым языком, обращайся к человеку на «вы», без морализаторства.",
+      "",
+      "Формат ответа — ровно четыре раздела, каждый начинается со строки-заголовка вида «## Название»:",
+      "## Активность",
+      "## Питание",
+      "## Обследования",
+      "## Сон",
+      "В каждом разделе — 3–4 пункта, начиная со строки «- ». Пункты конкретные, с числами там, где уместно",
+      "(минуты, частота в неделю, порции, часы сна). Учитывай возраст и уровень активности.",
+      "В разделе «Обследования» опирайся на возрастные ориентиры диспансеризации, но без диагнозов.",
+      "В конце добавь раздел:",
+      "## Важно",
+      "и в нём одной строкой: «Материал носит образовательный характер и не является медицинской рекомендацией.»",
+      "Никакого текста до первого раздела и после раздела «Важно»."
+    ].join("\n");
+
+    function buildPrompt(input) {
+      // input = { age, activity, goals, notes }
+      const lines = [];
+      lines.push("Возраст: " + input.age + " лет.");
+      lines.push("Уровень физической активности: " + input.activity + ".");
+      lines.push("Цели профилактики: " + (input.goals.length ? input.goals.join(", ") : "не выбраны — предложи базовый набор") + ".");
+      lines.push("");
+      lines.push("Самочувствие, жалобы и образ жизни (со слов пользователя):");
+      lines.push(input.notes.trim() ? input.notes.trim() : "— ничего дополнительно не указано.");
+      lines.push("");
+      lines.push("Составь персональный профилактический план строго в заданном формате.");
+      return lines.join("\n");
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ SAFETY: RED FLAGS ═════════════════════════════════════════
+    // Проверка ДО любого запроса к LLM (совпадение → совет врача, плана нет).
+    // Покрывает список TASK.md §6.2: боль в груди, одышка, кровотечение,
+    // потеря сознания, суицидальные мысли, температура > 39 °C, острая боль
+    // в животе, признаки инсульта (асимметрия лица/рук, расстройство речи).
+    // ═══════════════════════════════════════════════════════════════
+    // ВАЖНО: в JS \w — только ASCII, кириллицу он НЕ покрывает.
+    // Поэтому везде используем класс [а-яё], иначе шаблон молча не срабатывает
+    // (например /бол\w*\s*в\s*живот/ не находил «боль в животе»).
+    const RED_FLAGS = [
+      /груд[иь][а-яё]*|за[а-яё]*грудин|в[а-яё]*\s*грудной|боль[а-яё]*\s*в\s*груд/i,        // боль в груди
+      /одышк|не[а-яё]*\s*хватает[а-яё]*\s*воздух|тяжело[а-яё]*\s*дыш|удушь|задыха|не[а-яё]*\s*могу[а-яё]*\s*дышать/i, // одышка / удушье
+      /кровотеч|кровь[а-яё]*\s*(идёт|идет|теч|из)|кровохаркан|обильн[а-яё]*\s*кров/i,        // кровотечение
+      /потер[а-яё]*\s*сознани|обморок|отключ[а-яё]*ся|без[а-яё]*\s*сознани|терял[а-яё]*\s*сознани/i, // потеря сознания
+      /суицид|покончить\s*с\s*собой|не[а-яё]*\s*хочу[а-яё]*\s*жить|самоубийств|жить[а-яё]*\s*не[а-яё]*\s*хочу|смысла[а-яё]*\s*жить|нет[а-яё]*\s*смысла/i, // суицидальные мысли
+      /температур[а-яё]*[^\d]{0,20}(39|4\d)|(39|4\d)[.,]?\d?\s*(°|град|градус|c\b)/i,        // температура выше 39 °C
+      /бол[а-яё]*\s*в\s*живот|живот[а-яё]*\s*(болит|режет|схватило|крутит)|режет[а-яё]*\s*живот|острый\s*живот/i, // острая боль в животе
+      /инсульт|асимметр[а-яё]*|перекосило|онемел[а-яё]*|нарушен[а-яё]*\s*реч|невнятн[а-яё]*\s*реч|не[а-яё]*может[а-яё]*говор|отнял[а-яё]*\s*(рук|ног|половин)/i, // признаки инсульта
+      /потеря[а-яё]*\s*речи|судорог|эпилепт[а-яё]*\s*приступ|приступ[а-яё]*\s*удушья/i      // судороги / тяжёлые приступы
+    ];
+
+    // Нормализация: регистр, лишние пробелы, ё→е.
+    function normalize(text) {
+      return String(text || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
+    }
+
+    function isRedFlag(text) {
+      const t = normalize(text);
+      return RED_FLAGS.some(re => re.test(t));
+    }
+
+    // ═══════════════ UI ════════════════════════════════════════════
+    const $ = id => document.getElementById(id);
+
+    function setStatus(kind, html) {
+      const el = $("status");
+      el.dataset.kind = kind;
+      el.innerHTML = html ? '<div class="status-box">' + html + "</div>" : "";
+    }
+
+    // Разбор простого markdown-подобного ответа («## Раздел», «- пункт»)
+    // в аккуратные карточки. Если модель не дала заголовков — показываем текст.
+    const ICONS = { "активность": "🏃", "питание": "🥗", "обследования": "🩺", "сон": "😴", "важно": "⚠️" };
+
+    function renderPlan(text, meta) {
+      const lines = text.split("\n");
+      const sections = [];
+      let current = null;
+
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+        const head = line.match(/^#{0,3}\s*(.+?)\s*$/);
+        if (/^#{1,3}\s+/.test(line)) {
+          current = { title: head[1].replace(/[*#:]+$/, "").trim(), items: [] };
+          sections.push(current);
+        } else if (current) {
+          current.items.push(line.replace(/^[-*•]\s*/, ""));
+        } else {
+          current = { title: "", items: [line] };
+          sections.push(current);
+        }
+      }
+
+      const plan = document.createElement("div");
+      const head = document.createElement("div");
+      head.className = "plan-head";
+      const h2 = document.createElement("h2");
+      h2.textContent = "Ваш план";
+      const metaEl = document.createElement("span");
+      metaEl.className = "plan-meta";
+      metaEl.textContent = meta; // model id с сервера — не доверяем, вставляем как текст
+      head.append(h2, metaEl);
+      plan.appendChild(head);
+
+      const hasStructure = sections.some(s => s.title);
+      if (!hasStructure) {
+        const box = document.createElement("section");
+        box.className = "section";
+        const pre = document.createElement("pre");
+        pre.className = "raw";
+        pre.textContent = text;
+        box.appendChild(pre);
+        plan.appendChild(box);
+      } else {
+        sections.forEach(s => {
+          if (s.title === "" && !s.items.length) return;
+          const box = document.createElement("section");
+          box.className = "section";
+          const key = s.title.toLowerCase();
+          const icon = ICONS[key] || "•";
+          if (s.title) {
+            const h3 = document.createElement("h3");
+            h3.innerHTML = '<span class="icon" aria-hidden="true">' + icon + "</span>";
+            h3.appendChild(document.createTextNode(s.title));
+            box.appendChild(h3);
+          }
+          if (s.items.length > 1) {
+            const ul = document.createElement("ul");
+            s.items.forEach(it => { const li = document.createElement("li"); li.textContent = it; ul.appendChild(li); });
+            box.appendChild(ul);
+          } else {
+            s.items.forEach(it => { const p = document.createElement("p"); p.textContent = it; box.appendChild(p); });
+          }
+          plan.appendChild(box);
+        });
+      }
+
+      const disc = document.createElement("div");
+      disc.className = "disclaimer";
+      const dIcon = document.createElement("span");
+      dIcon.setAttribute("aria-hidden", "true");
+      dIcon.textContent = "⚠️";
+      const dText = document.createElement("span");
+      dText.innerHTML = "<b>Дисклеймер.</b> ";
+      dText.appendChild(document.createTextNode(
+        "Материал носит образовательный характер и не является медицинской рекомендацией."
+      ));
+      disc.append(dIcon, dText);
+      plan.appendChild(disc);
+
+      const old = $("plan");
+      old.replaceChildren(...plan.childNodes);
+    }
+
+    $("fh").addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const input = {
+        age: $("age").value,
+        activity: $("activity").value,
+        goals: [...document.querySelectorAll("input[name=goal]:checked")].map(el => el.value),
+        notes: $("notes").value
+      };
+
+      // red flags — строго до обращения к модели:
+      if (isRedFlag(input.notes)) {
+        $("banner").dataset.visible = "true";
+        $("banner").scrollIntoView({ behavior: "smooth", block: "center" });
+        $("plan").replaceChildren();
+        setStatus("", "");
+        return;
+      }
+      $("banner").dataset.visible = "false";
+
+      // держим UI отзывчивым: статус «думаю…» + таймер
+      $("plan").replaceChildren();
+      $("go").disabled = true;
+      const started = Date.now();
+      let ticker;
+
+      const paintLoading = () => {
+        const secs = Math.round((Date.now() - started) / 1000);
+        setStatus("", '<div class="spinner" aria-hidden="true"></div>' +
+          "<span>Локальная модель думает… <b>" + secs + " с</b>. Первый ответ может занять десятки секунд — страница остаётся отзывчивой.</span>");
+      };
+      paintLoading();
+      ticker = setInterval(paintLoading, 1000);
+
+      try {
+        const server = await getServer();
+        const reply = await chat([
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: buildPrompt(input) }
+        ]);
+        clearInterval(ticker);
+        const secs = Math.round((Date.now() - started) / 1000);
+        const stamp = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+        renderPlan(reply, server.modelName + " · " + secs + " с · " + stamp);
+        setStatus("ok", "<span>Готово. План сформирован локально на <b>" + server.name + "</b>.</span>");
+      } catch (err) {
+        clearInterval(ticker);
+        setStatus("error", "<span><b>Модель недоступна.</b> " + err.message + "</span>");
+      } finally {
+        $("go").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
