@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ru">
+<!--
+  ════════════════════════════════════════════════════════════════════
+  ЗАГОТОВКА ДЛЯ ХАКАТОНА (правила — TASK.md). Здесь намеренно минимум.
+
+  Ваша работа за 30 минут:
+    1) <style>              — пустой, добавьте свои стили (метка ниже);
+    2) "LLM: ПРОМПТ"        — сейчас самая простая версия, напишите свою;
+    3) "SAFETY: RED FLAGS"  — сейчас минимальный список, расширьте его;
+    4) разметка вывода и UX — TODO-комментарии подскажут.
+
+  Трогать не обязательно: блок "LLM: ПОДКЛЮЧЕНИЕ" уже рабочий.
+  Работает с любым сервером-хакатоном на порту 8000 без настройки:
+  сначала пробуется стандартный llama.cpp, затем стенд организаторов
+  OVMS; если оба недоступны — показывается понятная ошибка. Ключи
+  не требуются.
+  ════════════════════════════════════════════════════════════════════
+-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Профилактика — локальный LLM</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 720px; margin: 0 auto; padding: 1.5rem; line-height: 1.5; color: #1f2937; background: #f9fafb; }
+    h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 1.5rem; color: #111827; }
+    form { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+    form > label { display: block; margin-bottom: 1rem; font-weight: 500; }
+    form > label > * { display: block; width: 100%; margin-top: 0.375rem; }
+    input[type="number"], select, textarea { border: 1px solid #d1d5db; border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 1rem; }
+    input[type="number"]:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    textarea { min-height: 80px; resize: vertical; }
+    .goals { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.375rem; }
+    .goals label { display: inline-flex; align-items: center; gap: 0.375rem; font-weight: 400; cursor: pointer; padding: 0.375rem 0.75rem; background: #f3f4f6; border-radius: 9999px; }
+    .goals input[type="checkbox"] { accent-color: #3b82f6; width: 1rem; height: 1rem; }
+    button#go { width: 100%; padding: 0.75rem; background: #3b82f6; color: white; font-size: 1rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+    button#go:hover:not(:disabled) { background: #2563eb; }
+    button#go:disabled { background: #93c5fd; cursor: not-allowed; }
+    #banner { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.875rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-weight: 500; }
+    #status { min-height: 1.5rem; color: #6b7280; font-size: 0.875rem; margin-bottom: 1rem; }
+    #plan { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: pre-wrap; }
+    #plan:empty { display: none; }
+    footer { text-align: center; color: #9ca3af; font-size: 0.75rem; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; }
+    @media (max-width: 480px) { body { padding: 1rem; } h1 { font-size: 1.5rem; } form { padding: 1rem; } }
+  </style>
+</head>
+<body>
+  <h1>Личный план профилактики</h1>
+
+  <div id="banner" style="display:none">Обратитесь к врачу (103): тревожные симптомы</div>
+
+  <form id="fh">
+    <label>Возраст <input id="age" type="number" value="35" min="1" max="120" required></label>
+    <label>Активность
+      <select id="activity">
+        <option>низкий</option><option selected>средний</option><option>высокий</option>
+      </select>
+    </label>
+    <div class="goals">
+      <label><input type="checkbox" name="goal" value="движение"> движение</label>
+      <label><input type="checkbox" name="goal" value="питание"> питание</label>
+      <label><input type="checkbox" name="goal" value="обследования"> обследования</label>
+      <label><input type="checkbox" name="goal" value="сон"> сон</label>
+    </div>
+    <label>Жалобы и образ жизни <textarea id="notes"></textarea></label>
+    <button id="go">Составить план</button>
+  </form>
+
+  <div id="status"></div>
+  <!-- TODO: оформите вывод плана (сейчас просто текст) -->
+  <div id="plan"></div>
+
+  <footer>Материал носит образовательный характер и не является медицинской рекомендацией.</footer>
+
+  <script>
+    "use strict";
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ LLM: ПОДКЛЮЧЕНИЕ ══════════════════════════════════════════
+    // Локальный LLM на OpenAI-совместимом API, только localhost:8000.
+    // Сайт сам определяет сервер по порядку ниже: сначала стандартный
+    // llama.cpp (docker compose --profile llama|tiny), если его нет —
+    // стенд организаторов OVMS; ни один не отвечает → понятная ошибка.
+    // ═══════════════════════════════════════════════════════════════
+    const SERVERS = [
+      { name: "llama.cpp", BASE_URL: "http://localhost:8000/v1" },
+      { name: "OVMS",      BASE_URL: "http://localhost:8000/v3" }
+    ];
+    let SERVER = null;
+
+    // Пробуем серверы по очереди: /models → первый живой, model id — в рантайме.
+    async function getServer() {
+      if (SERVER) return SERVER;
+      for (const s of SERVERS) {
+        try {
+          const r = await fetch(s.BASE_URL + "/models");
+          if (!r.ok) continue;
+          const j = await r.json();
+          const id = j.data && j.data[0] && j.data[0].id;
+          if (id) {
+            SERVER = Object.assign({ modelName: id }, s);
+            return SERVER;
+          }
+        } catch (err) { /* следующий сервер */ }
+      }
+      throw new Error("Отсутствует локальный LLM на localhost:8000 процесс llama.cpp или OVMS." +
+        " Запустите docker compose --profile llama up -d (TASK.md §9).");
+    }
+
+    async function chat(messages) {
+      const r = await fetch(SERVER.BASE_URL + "/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: SERVER.modelName, messages })
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status + " (" + SERVER.name + ")");
+      return (await r.json()).choices[0].message.content; // TODO: проверьте ответ на пустоту
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ LLM: ПРОМПТ ═══════════════════════════════════════════════
+    // Сейчас минимальный — придумайте свой (по-русски, структурированный
+    // план, без диагнозов и лекарств). Это оценивается жюри.
+    // ═══════════════════════════════════════════════════════════════
+    const SYSTEM_PROMPT =
+      "Составь персональный план профилактики по целям пользователя."; // TODO: ваш промпт
+
+    function buildPrompt(input) {
+      // input = { age, activity, goals, notes }
+      return "Возраст: " + input.age + ". Активность: " + input.activity +
+        ". Цели: " + input.goals.join(", ") + ". " + input.notes; // TODO: соберите подробнее
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ SAFETY: RED FLAGS ═════════════════════════════════════════
+    // Проверка ДО любого запроса к LLM (совпадение → совет врача).
+    // Сейчас минимум — расширьте по списку из TASK.md §6.2.
+    // ═══════════════════════════════════════════════════════════════
+    const RED_FLAGS = [
+      /боль\s+в\s+груд[и]/i,
+      /суицид|покончить\s+с\s+собой/i
+    ];
+    function isRedFlag(text) {
+      return RED_FLAGS.some(re => re.test(text)); // TODO: расширьте список выше
+    }
+
+    // ═══════════════ UI (минимум — сделайте свой) ══════════════════
+    const $ = id => document.getElementById(id);
+
+    $("fh").addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const input = {
+        age: $("age").value,
+        activity: $("activity").value,
+        goals: [...document.querySelectorAll("input[name=goal]:checked")].map(el => el.value),
+        notes: $("notes").value
+      };
+
+      // red flags — до обращения к модели:
+      if (isRedFlag(input.notes)) {
+        $("banner").style.display = "block";
+        return;
+      }
+      $("banner").style.display = "none";
+      $("plan").textContent = "";
+      $("go").disabled = true;
+      $("status").textContent = "Ждём локальную модель — это может занять десятки секунд…";
+
+      try {
+        await getServer(); // llama.cpp → OVMS → ошибка
+        const reply = await chat([
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: buildPrompt(input) }
+        ]);
+        $("plan").textContent = reply; // TODO: оформите красивый вывод
+        $("status").textContent = "";
+      } catch (err) {
+        $("status").textContent = "Ошибка: " + err.message;
+      } finally {
+        $("go").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
